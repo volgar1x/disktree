@@ -1,0 +1,13 @@
+[package]
+name = "disktree"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[dev-dependencies]
+anyhow = { version = "1.0.104", features = ["backtrace"] }
+rand = "0.10.3"
+sha2 = "0.11.0"
+structured-zstd = "0.0.55"
+walkdir = "2.5.0"
