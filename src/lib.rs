@@ -6,5 +6,5 @@ mod key;
 mod value;
 
 pub use item::Item;
-pub use key::{Key, KeyRef};
+pub use key::{KEY_LENGTH, Key};
 pub use value::Value;

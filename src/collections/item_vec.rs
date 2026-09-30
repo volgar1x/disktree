@@ -1,7 +1,7 @@
 use std::{fmt, ops::Deref};
 
 use crate::{
-    Item, Key, KeyRef, Value,
+    Item, Key, Value,
     collections::{GetByKey, InsertItem},
     functional::Setter,
     item::ITEM_LENGTH,
@@ -28,18 +28,16 @@ impl GetByKey for ItemVec {
         self.0.len()
     }
 
-    fn keys(&self) -> impl Iterator<Item = &KeyRef> {
-        self.0.iter().map(|item| KeyRef::new(&item.key))
+    fn keys(&self) -> impl Iterator<Item = &Key> {
+        self.0.iter().map(|item| &item.key)
     }
 
-    fn contains(&self, key: &KeyRef) -> bool {
-        self.0
-            .binary_search_by(|item| item.key.as_ref().cmp(key))
-            .is_ok()
+    fn contains(&self, key: &Key) -> bool {
+        self.0.binary_search_by(|item| item.key.cmp(key)).is_ok()
     }
 
-    fn get(&self, key: &KeyRef) -> Option<Value> {
-        if let Ok(index) = self.0.binary_search_by(|item| item.key.as_ref().cmp(key)) {
+    fn get(&self, key: &Key) -> Option<Value> {
+        if let Ok(index) = self.0.binary_search_by(|item| item.key.cmp(key)) {
             Some(self.0[index].value)
         } else {
             None
@@ -49,10 +47,7 @@ impl GetByKey for ItemVec {
 
 impl InsertItem for ItemVec {
     fn insert(&mut self, key: Key, value: Value) -> bool {
-        let Err(index) = self
-            .0
-            .binary_search_by_key(&KeyRef::new(&key), |item| KeyRef::new(&item.key))
-        else {
+        let Err(index) = self.0.binary_search_by(|item| item.key.cmp(&key)) else {
             return false;
         };
 
@@ -61,10 +56,7 @@ impl InsertItem for ItemVec {
     }
 
     fn insert_mut(&mut self, key: Key) -> Option<impl Setter<Value>> {
-        let Err(index) = self
-            .0
-            .binary_search_by_key(&KeyRef::new(&key), |item| KeyRef::new(&item.key))
-        else {
+        let Err(index) = self.0.binary_search_by(|item| item.key.cmp(&key)) else {
             return None;
         };
 

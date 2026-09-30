@@ -1,17 +1,26 @@
-use std::{
-    borrow::Borrow,
-    fmt::{self, Write},
-};
+use std::fmt::{self, Write};
 
 use crate::hex;
 
-pub(crate) const KEY_LENGTH: usize = 32;
+pub const KEY_LENGTH: usize = 32;
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Key(pub [u8; KEY_LENGTH]);
+pub struct Key([u8; KEY_LENGTH]);
 
 impl Key {
     pub const ZERO: Key = Key([0u8; KEY_LENGTH]);
+
+    pub fn new(key: [u8; KEY_LENGTH]) -> Self {
+        Self(key)
+    }
+
+    pub fn from_ref(bytes: &[u8; KEY_LENGTH]) -> &Self {
+        unsafe { std::mem::transmute(bytes) }
+    }
+
+    pub fn from_bytes(key: &[u8]) -> Option<&Self> {
+        key.as_array().map(Self::from_ref)
+    }
 
     pub fn from_hex(hex: &str) -> Option<Self> {
         if hex.len() != KEY_LENGTH * 2 {
@@ -25,43 +34,33 @@ impl Key {
         Some(Self(bytes))
     }
 
+    pub fn copy_from_slice(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != KEY_LENGTH {
+            return None;
+        }
+        let mut key = [0u8; KEY_LENGTH];
+        key.copy_from_slice(bytes);
+        Some(Self(key))
+    }
+
+    pub fn as_bytes(&self) -> &[u8; KEY_LENGTH] {
+        &self.0
+    }
+
     pub fn into_bytes(self) -> [u8; KEY_LENGTH] {
         self.0
     }
-}
 
-#[allow(clippy::to_string_trait_impl)]
-impl ToString for Key {
-    fn to_string(&self) -> String {
-        self.0.iter().flat_map(|x| hex::write_byte(*x)).collect()
+    pub fn hex_display(&self) -> impl fmt::Display {
+        fmt::from_fn(|f| fmt::Debug::fmt(self, f))
+    }
+
+    pub fn to_hex_string(&self) -> String {
+        self.hex_display().to_string()
     }
 }
 
-#[derive(Eq, Ord, PartialEq, PartialOrd)]
-pub struct KeyRef([u8; KEY_LENGTH]);
-
-impl KeyRef {
-    pub fn new(key: &Key) -> &Self {
-        unsafe { std::mem::transmute(&key.0) }
-    }
-
-    pub fn new_slice(keys: &[Key]) -> &[Self] {
-        unsafe { std::mem::transmute(keys) }
-    }
-
-    pub fn from_bytes(bytes: &[u8; KEY_LENGTH]) -> &Self {
-        unsafe { std::mem::transmute(bytes) }
-    }
-}
-
-#[allow(clippy::to_string_trait_impl)]
-impl ToString for KeyRef {
-    fn to_string(&self) -> String {
-        self.0.iter().flat_map(|x| hex::write_byte(*x)).collect()
-    }
-}
-
-impl fmt::Debug for KeyRef {
+impl fmt::Debug for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for x in self.0.iter() {
             let [msb, lsb] = hex::write_byte(*x);
@@ -69,37 +68,5 @@ impl fmt::Debug for KeyRef {
             f.write_char(lsb)?;
         }
         Ok(())
-    }
-}
-
-impl AsRef<KeyRef> for KeyRef {
-    fn as_ref(&self) -> &KeyRef {
-        self
-    }
-}
-
-impl fmt::Debug for Key {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        KeyRef::new(self).fmt(f)
-    }
-}
-
-impl AsRef<KeyRef> for Key {
-    fn as_ref(&self) -> &KeyRef {
-        KeyRef::new(self)
-    }
-}
-
-impl Borrow<KeyRef> for Key {
-    fn borrow(&self) -> &KeyRef {
-        KeyRef::new(self)
-    }
-}
-
-impl ToOwned for KeyRef {
-    type Owned = Key;
-
-    fn to_owned(&self) -> Self::Owned {
-        Key(self.0)
     }
 }

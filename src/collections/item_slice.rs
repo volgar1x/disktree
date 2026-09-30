@@ -1,7 +1,7 @@
 use std::{fmt, ops::Deref, slice};
 
 use crate::{
-    KeyRef, Value,
+    Key, Value,
     collections::GetByKey,
     item::{ITEM_LENGTH, ItemRef},
 };
@@ -38,15 +38,15 @@ impl GetByKey for ItemSlice {
         self.0.len()
     }
 
-    fn keys(&self) -> impl Iterator<Item = &KeyRef> {
+    fn keys(&self) -> impl Iterator<Item = &Key> {
         self.0.iter().map(|item| item.key())
     }
 
-    fn contains(&self, key: &KeyRef) -> bool {
+    fn contains(&self, key: &Key) -> bool {
         self.0.binary_search_by_key(&key, |item| item.key()).is_ok()
     }
 
-    fn get(&self, key: &KeyRef) -> Option<Value> {
+    fn get(&self, key: &Key) -> Option<Value> {
         self.0
             .binary_search_by_key(&key, |item| item.key())
             .ok()

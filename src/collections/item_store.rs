@@ -3,7 +3,7 @@ mod binary_search;
 use std::{borrow::Cow, slice};
 
 use crate::{
-    Item, Key, KeyRef, Value,
+    Item, Key, Value,
     collections::{
         GetByKey, InsertItem, ItemSlice, ItemVec, KeySlice, item_store::binary_search::SearchResult,
     },
@@ -64,18 +64,18 @@ impl GetByKey for ItemStore<'_> {
         self.0.iter().map(|group| group.len()).sum()
     }
 
-    fn keys(&self) -> impl Iterator<Item = &KeyRef> {
+    fn keys(&self) -> impl Iterator<Item = &Key> {
         self.0
             .iter()
             .flat_map(|group| group.iter())
             .map(|item| item.key())
     }
 
-    fn contains(&self, key: &KeyRef) -> bool {
+    fn contains(&self, key: &Key) -> bool {
         self.binary_search(key, None).is_found()
     }
 
-    fn get(&self, key: &KeyRef) -> Option<Value> {
+    fn get(&self, key: &Key) -> Option<Value> {
         if let SearchResult::Found { index, group_index } = self.binary_search(key, None) {
             Some(self.0[index][group_index].value())
         } else {
@@ -181,7 +181,7 @@ impl ItemStore<'_> {
 }
 
 impl<'a> ItemStore<'a> {
-    pub fn remove(&mut self, key: impl AsRef<KeyRef>) -> Option<Value> {
+    pub fn remove(&mut self, key: &Key) -> Option<Value> {
         let SearchResult::Found { index, group_index } = self.binary_search(key, None) else {
             return None;
         };
@@ -298,7 +298,7 @@ impl<'a, 'b> Iterator for ItemStoreAppender<'a, 'b> {
 #[must_use]
 struct ItemStoreRemover<'a, 'b> {
     store: &'b mut ItemStore<'a>,
-    keys: slice::Iter<'b, KeyRef>,
+    keys: slice::Iter<'b, Key>,
     prev_needle: Option<(usize, usize)>,
 }
 

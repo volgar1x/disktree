@@ -1,4 +1,4 @@
-use crate::{Key, KeyRef, Value, functional::Setter};
+use crate::{Key, Value, functional::Setter};
 
 mod item_slice;
 mod item_store;
@@ -15,9 +15,9 @@ pub use key_slice::KeySlice;
 pub trait GetByKey {
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
-    fn keys(&self) -> impl Iterator<Item = &KeyRef>;
-    fn contains(&self, key: &KeyRef) -> bool;
-    fn get(&self, key: &KeyRef) -> Option<Value>;
+    fn keys(&self) -> impl Iterator<Item = &Key>;
+    fn contains(&self, key: &Key) -> bool;
+    fn get(&self, key: &Key) -> Option<Value>;
 }
 
 pub trait InsertItem {

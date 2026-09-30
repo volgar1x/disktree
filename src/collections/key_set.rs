@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::{Key, KeyRef, collections::key_slice::KeySlice};
+use crate::{Key, collections::key_slice::KeySlice};
 
 #[derive(Clone, Debug)]
 pub struct KeySet(Vec<Key>);
@@ -28,9 +28,9 @@ impl KeySet {
         }
     }
 
-    pub fn remove(&mut self, key: impl AsRef<KeyRef>) -> bool {
+    pub fn remove(&mut self, key: impl AsRef<Key>) -> bool {
         let key = key.as_ref();
-        if let Ok(index) = self.0.binary_search_by(|item| item.as_ref().cmp(key)) {
+        if let Ok(index) = self.0.binary_search_by(|item| item.cmp(key)) {
             self.0.remove(index);
             true
         } else {
@@ -65,6 +65,6 @@ impl IntoIterator for KeySet {
 
 impl AsRef<KeySlice> for KeySet {
     fn as_ref(&self) -> &KeySlice {
-        KeySlice::new(KeyRef::new_slice(&self.0))
+        KeySlice::new_unchecked(&self.0)
     }
 }

@@ -2,7 +2,7 @@ use std::{fmt, mem::MaybeUninit};
 
 use crate::{
     functional::Setter,
-    key::{KEY_LENGTH, Key, KeyRef},
+    key::{KEY_LENGTH, Key},
     value::{VALUE_LENGTH, Value},
 };
 
@@ -44,9 +44,9 @@ impl ItemRef {
         Self(Item { key, value }.into_bytes())
     }
 
-    pub fn key(&self) -> &KeyRef {
+    pub fn key(&self) -> &Key {
         let key = unsafe { &*self.0.as_ptr().cast() };
-        KeyRef::from_bytes(key)
+        Key::from_ref(key)
     }
 
     pub fn value(&self) -> Value {
