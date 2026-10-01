@@ -51,6 +51,25 @@ impl Key {
         self.0
     }
 
+    pub fn into_box(self) -> Box<[u8]> {
+        let mut boxed = Box::<[u8]>::new_uninit_slice(KEY_LENGTH);
+        unsafe {
+            boxed.assume_init_mut().copy_from_slice(&self.0);
+            boxed.assume_init()
+        }
+    }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        let mut vec = Vec::with_capacity(KEY_LENGTH);
+        unsafe {
+            vec.spare_capacity_mut()
+                .assume_init_mut()
+                .copy_from_slice(&self.0);
+            vec.set_len(KEY_LENGTH);
+        }
+        vec
+    }
+
     pub fn hex_display(&self) -> impl fmt::Display {
         fmt::from_fn(|f| fmt::Debug::fmt(self, f))
     }

@@ -40,9 +40,17 @@ impl<'a> ItemStore<'a> {
         Self::with_chunk_size(items, 0x200)
     }
 
-    pub fn cow_chunks(&self) -> impl Iterator<Item = &Cow<'a, [ItemRef]>> {
-        self.0.iter()
+    pub fn into_chunks(self) -> impl Iterator<Item = ItemStoreChunk<'a>> {
+        self.0.into_iter().map(|chunk| match chunk {
+            Cow::Borrowed(chunk) => ItemStoreChunk::Borrowed(ItemSlice::new(chunk)),
+            Cow::Owned(chunk) => ItemStoreChunk::Owned(chunk),
+        })
     }
+}
+
+pub enum ItemStoreChunk<'a> {
+    Borrowed(&'a ItemSlice),
+    Owned(Vec<ItemRef>),
 }
 
 impl ItemStore<'_> {

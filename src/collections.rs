@@ -7,7 +7,7 @@ mod key_set;
 mod key_slice;
 
 pub use item_slice::ItemSlice;
-pub use item_store::ItemStore;
+pub use item_store::{ItemStore, ItemStoreChunk};
 pub use item_vec::ItemVec;
 pub use key_set::KeySet;
 pub use key_slice::KeySlice;

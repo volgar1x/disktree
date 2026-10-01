@@ -40,6 +40,11 @@ impl ItemRef {
         unsafe { std::mem::transmute(bytes) }
     }
 
+    pub fn cast_vec(vec: Vec<Self>) -> Vec<u8> {
+        let (ptr, len, cap) = vec.into_raw_parts();
+        unsafe { Vec::from_raw_parts(ptr.cast(), len / ITEM_LENGTH, cap / ITEM_LENGTH) }
+    }
+
     pub fn new(key: Key, value: Value) -> Self {
         Self(Item { key, value }.into_bytes())
     }
@@ -69,6 +74,10 @@ impl ItemRef {
             key: self.key().to_owned(),
             value: self.value(),
         }
+    }
+
+    pub fn into_bytes(self) -> [u8; ITEM_LENGTH] {
+        self.0
     }
 }
 
