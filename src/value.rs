@@ -2,7 +2,7 @@ use std::ops::Range;
 
 pub(crate) const VALUE_LENGTH: usize = 12;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Value {
     pub offset: u32,
     pub length: u32,

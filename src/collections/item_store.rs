@@ -1,17 +1,26 @@
 mod binary_search;
 
-use std::{borrow::Cow, slice};
+use std::{borrow::Cow, fmt, slice};
 
 use crate::{
-    Item, Key, Value,
+    Item, ItemRef, Key, KeyRef, Value,
     collections::{
         GetByKey, InsertItem, ItemSlice, ItemVec, KeySlice, item_store::binary_search::SearchResult,
     },
     functional::Setter,
-    item::{ITEM_LENGTH, ItemRef},
+    item::ITEM_LENGTH,
 };
 
 pub struct ItemStore<'a>(Vec<Cow<'a, [ItemRef]>>);
+
+impl fmt::Debug for ItemStore<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ItemStore")
+            .field("chunks", &self.0.len())
+            .field("len", &self.len())
+            .finish()
+    }
+}
 
 impl<'a, 'b> IntoIterator for &'b ItemStore<'a>
 where
@@ -72,18 +81,18 @@ impl GetByKey for ItemStore<'_> {
         self.0.iter().map(|group| group.len()).sum()
     }
 
-    fn keys(&self) -> impl Iterator<Item = &Key> {
+    fn keys(&self) -> impl Iterator<Item = &KeyRef> {
         self.0
             .iter()
             .flat_map(|group| group.iter())
             .map(|item| item.key())
     }
 
-    fn contains(&self, key: &Key) -> bool {
+    fn contains(&self, key: impl AsRef<KeyRef>) -> bool {
         self.binary_search(key, None).is_found()
     }
 
-    fn get(&self, key: &Key) -> Option<Value> {
+    fn get(&self, key: impl AsRef<KeyRef>) -> Option<Value> {
         if let SearchResult::Found { index, group_index } = self.binary_search(key, None) {
             Some(self.0[index][group_index].value())
         } else {
@@ -189,7 +198,7 @@ impl ItemStore<'_> {
 }
 
 impl<'a> ItemStore<'a> {
-    pub fn remove(&mut self, key: &Key) -> Option<Value> {
+    pub fn remove(&mut self, key: impl AsRef<KeyRef>) -> Option<Value> {
         let SearchResult::Found { index, group_index } = self.binary_search(key, None) else {
             return None;
         };
@@ -306,7 +315,7 @@ impl<'a, 'b> Iterator for ItemStoreAppender<'a, 'b> {
 #[must_use]
 struct ItemStoreRemover<'a, 'b> {
     store: &'b mut ItemStore<'a>,
-    keys: slice::Iter<'b, Key>,
+    keys: slice::Iter<'b, KeyRef>,
     prev_needle: Option<(usize, usize)>,
 }
 
@@ -332,6 +341,69 @@ impl<'a, 'b> Iterator for ItemStoreRemover<'a, 'b> {
             self.prev_needle = Some((index, group_index));
 
             return Some((item.key().to_owned(), item.value()));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::KEY_LENGTH;
+
+    use super::*;
+
+    #[test]
+    fn test_insert_empty_item_store() {
+        let items = ItemSlice::new(&[]);
+        let mut items = ItemStore::new(items);
+
+        const NUM_ITEMS: usize = 10;
+        let mut new_items = ItemVec::new();
+        while new_items.len() < NUM_ITEMS {
+            let mut key = [0u8; KEY_LENGTH];
+            rand::fill(&mut key);
+            let key = Key::from_array(key);
+            let index = new_items.len().try_into().unwrap();
+            let value = Value {
+                offset: index,
+                length: index,
+                decompressed: index,
+            };
+            new_items.insert(key.clone(), value);
+            items.insert(key, value);
+        }
+
+        assert_eq!(NUM_ITEMS, new_items.len());
+        for key in new_items.keys() {
+            std::assert_matches!(new_items.get(key), Some(value) if value.offset == value.length && value.length == value.decompressed);
+        }
+    }
+
+    #[test]
+    fn test_append_empty_item_store() {
+        let items = ItemSlice::new(&[]);
+        let mut items = ItemStore::new(items);
+
+        const NUM_ITEMS: usize = 10;
+        let mut new_items = ItemVec::new();
+        while new_items.len() < NUM_ITEMS {
+            let mut key = [0u8; KEY_LENGTH];
+            rand::fill(&mut key);
+            let key = Key::from_array(key);
+            let index = new_items.len().try_into().unwrap();
+            let value = Value {
+                offset: index,
+                length: index,
+                decompressed: index,
+            };
+            new_items.insert(key, value);
+        }
+        for _ in items.append(new_items.clone(), 0) {
+            continue;
+        }
+
+        assert_eq!(NUM_ITEMS, new_items.len());
+        for key in new_items.keys() {
+            std::assert_matches!(new_items.get(key), Some(value) if value.offset == value.length && value.length == value.decompressed);
         }
     }
 }

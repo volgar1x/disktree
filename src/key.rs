@@ -1,73 +1,65 @@
-use std::fmt::{self, Write};
+use std::{
+    borrow::Borrow,
+    fmt::{self, Write},
+};
+
+use bytes::Bytes;
 
 use crate::hex;
 
 pub const KEY_LENGTH: usize = 32;
 
-#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Key([u8; KEY_LENGTH]);
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+pub struct KeyRef([u8; KEY_LENGTH]);
 
-impl Key {
-    pub const ZERO: Key = Key([0u8; KEY_LENGTH]);
+impl fmt::Debug for KeyRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for x in self.0 {
+            let [msb, lsb] = hex::write_byte(x);
+            f.write_char(msb)?;
+            f.write_char(lsb)?;
+        }
+        Ok(())
+    }
+}
 
-    pub fn new(key: [u8; KEY_LENGTH]) -> Self {
-        Self(key)
+impl KeyRef {
+    pub(crate) fn clone(&self) -> Self {
+        Self(self.copy_bytes())
     }
 
-    pub fn from_ref(bytes: &[u8; KEY_LENGTH]) -> &Self {
+    pub(crate) fn into_array(self) -> [u8; KEY_LENGTH] {
+        self.0
+    }
+}
+
+impl KeyRef {
+    pub const ZERO: Self = Self([0u8; KEY_LENGTH]);
+
+    pub fn new(bytes: &[u8; KEY_LENGTH]) -> &Self {
         unsafe { std::mem::transmute(bytes) }
     }
 
     pub fn from_bytes(key: &[u8]) -> Option<&Self> {
-        key.as_array().map(Self::from_ref)
+        key.as_array().map(Self::new)
     }
 
-    pub fn from_hex(hex: &str) -> Option<Self> {
-        if hex.len() != KEY_LENGTH * 2 {
-            return None;
-        }
-        let chunks = hex.as_bytes().as_chunks::<2>().0;
+    pub fn copy_bytes(&self) -> [u8; KEY_LENGTH] {
         let mut bytes = [0u8; KEY_LENGTH];
-        for (index, [msb, lsb]) in chunks.iter().enumerate() {
-            bytes[index] = hex::read_byte(*msb, *lsb)?;
-        }
-        Some(Self(bytes))
+        bytes.copy_from_slice(&self.0);
+        bytes
     }
 
-    pub fn copy_from_slice(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != KEY_LENGTH {
-            return None;
-        }
-        let mut key = [0u8; KEY_LENGTH];
-        key.copy_from_slice(bytes);
-        Some(Self(key))
-    }
-
-    pub fn as_bytes(&self) -> &[u8; KEY_LENGTH] {
+    pub fn as_array(&self) -> &[u8; KEY_LENGTH] {
         &self.0
     }
 
-    pub fn into_bytes(self) -> [u8; KEY_LENGTH] {
-        self.0
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 
-    pub fn into_box(self) -> Box<[u8]> {
-        let mut boxed = Box::<[u8]>::new_uninit_slice(KEY_LENGTH);
-        unsafe {
-            boxed.assume_init_mut().copy_from_slice(&self.0);
-            boxed.assume_init()
-        }
-    }
-
-    pub fn into_vec(self) -> Vec<u8> {
-        let mut vec = Vec::with_capacity(KEY_LENGTH);
-        unsafe {
-            vec.spare_capacity_mut()
-                .assume_init_mut()
-                .copy_from_slice(&self.0);
-            vec.set_len(KEY_LENGTH);
-        }
-        vec
+    pub fn as_key(&self, bytes: &Bytes) -> Key {
+        Key(bytes.slice_ref(self.as_bytes()))
     }
 
     pub fn hex_display(&self) -> impl fmt::Display {
@@ -79,13 +71,100 @@ impl Key {
     }
 }
 
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Key(Bytes);
+
 impl fmt::Debug for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for x in self.0.iter() {
+        for x in &self.0 {
             let [msb, lsb] = hex::write_byte(*x);
             f.write_char(msb)?;
             f.write_char(lsb)?;
         }
         Ok(())
+    }
+}
+
+impl Key {
+    pub fn new(bytes: Bytes) -> Option<Self> {
+        (bytes.len() == KEY_LENGTH).then(|| Self(bytes))
+    }
+
+    pub fn from_array(key: [u8; KEY_LENGTH]) -> Self {
+        Self(Bytes::from_owner(key))
+    }
+
+    pub fn copy_from_array(bytes: &[u8; KEY_LENGTH]) -> Self {
+        Self(Bytes::copy_from_slice(bytes))
+    }
+
+    pub fn copy_from_slice(bytes: &[u8]) -> Option<Self> {
+        (bytes.len() == KEY_LENGTH).then(|| Self(Bytes::copy_from_slice(bytes)))
+    }
+
+    pub fn from_hex(hex: &str) -> Option<Self> {
+        let (chunks, overflow) = hex.as_bytes().as_chunks::<2>();
+        if !overflow.is_empty() || chunks.len() != KEY_LENGTH {
+            return None;
+        }
+        let mut bytes = [0u8; KEY_LENGTH];
+        for (index, [msb, lsb]) in chunks.iter().enumerate() {
+            bytes[index] = hex::read_byte(*msb, *lsb)?;
+        }
+        Some(Self(Bytes::from_owner(bytes)))
+    }
+
+    pub fn as_array(&self) -> &[u8; KEY_LENGTH] {
+        self.0.as_array().expect("Wrong key length")
+    }
+
+    pub fn into_bytes(self) -> Bytes {
+        self.0
+    }
+
+    pub fn hex_display(&self) -> impl fmt::Display {
+        fmt::from_fn(|f| fmt::Debug::fmt(self, f))
+    }
+
+    pub fn to_hex_string(&self) -> String {
+        self.hex_display().to_string()
+    }
+}
+
+impl AsRef<KeyRef> for KeyRef {
+    fn as_ref(&self) -> &KeyRef {
+        self
+    }
+}
+
+impl AsRef<KeyRef> for Key {
+    fn as_ref(&self) -> &KeyRef {
+        KeyRef::new(self.as_array())
+    }
+}
+
+impl Borrow<KeyRef> for Key {
+    fn borrow(&self) -> &KeyRef {
+        KeyRef::new(self.as_array())
+    }
+}
+
+impl ToOwned for KeyRef {
+    type Owned = Key;
+
+    fn to_owned(&self) -> Self::Owned {
+        Key::copy_from_array(&self.0)
+    }
+}
+
+impl PartialEq<KeyRef> for Key {
+    fn eq(&self, other: &KeyRef) -> bool {
+        self.as_ref() == other
+    }
+}
+
+impl PartialEq<Key> for KeyRef {
+    fn eq(&self, other: &Key) -> bool {
+        self == other.as_ref()
     }
 }

@@ -287,7 +287,7 @@ fn verify_object(object: &[u8], digest: &mut Sha256) -> anyhow::Result<Key> {
         digest.update(&buf[..read]);
     }
 
-    let key = Key::new(digest.finalize_reset().0);
+    let key = Key::from_array(digest.finalize_reset().0);
     Ok(key)
 }
 
@@ -299,7 +299,7 @@ fn read_file(path: &Path, digest: &mut Sha256) -> io::Result<(Key, Vec<u8>)> {
 
     let contents = read_to_vec(&mut file, file_len as _)?;
     Digest::update(digest, &contents);
-    let key = Key::new(digest.finalize_reset().0);
+    let key = Key::from_array(digest.finalize_reset().0);
 
     Ok((key, contents))
 }

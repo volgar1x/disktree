@@ -2,7 +2,7 @@ use std::{fmt, mem::MaybeUninit};
 
 use crate::{
     functional::Setter,
-    key::{KEY_LENGTH, Key},
+    key::{KEY_LENGTH, Key, KeyRef},
     value::{VALUE_LENGTH, Value},
 };
 
@@ -19,7 +19,7 @@ impl Item {
         let mut bytes = MaybeUninit::<[u8; ITEM_LENGTH]>::uninit();
         unsafe {
             let ptr = bytes.as_mut_ptr().cast::<u8>();
-            ptr.cast::<[u8; KEY_LENGTH]>().write(self.key.into_bytes());
+            ptr.cast::<[u8; KEY_LENGTH]>().write(*self.key.as_array());
             ptr.add(KEY_LENGTH)
                 .cast::<[u8; VALUE_LENGTH]>()
                 .write(self.value.into_bytes());
@@ -42,16 +42,25 @@ impl ItemRef {
 
     pub fn cast_vec(vec: Vec<Self>) -> Vec<u8> {
         let (ptr, len, cap) = vec.into_raw_parts();
-        unsafe { Vec::from_raw_parts(ptr.cast(), len / ITEM_LENGTH, cap / ITEM_LENGTH) }
+        unsafe { Vec::from_raw_parts(ptr.cast(), len * ITEM_LENGTH, cap * ITEM_LENGTH) }
     }
 
     pub fn new(key: Key, value: Value) -> Self {
         Self(Item { key, value }.into_bytes())
     }
 
-    pub fn key(&self) -> &Key {
+    pub fn key(&self) -> &KeyRef {
         let key = unsafe { &*self.0.as_ptr().cast() };
-        Key::from_ref(key)
+        KeyRef::new(key)
+    }
+
+    pub fn set_key(&mut self, key: &KeyRef) {
+        unsafe {
+            self.0
+                .as_mut_ptr()
+                .cast::<[u8; KEY_LENGTH]>()
+                .write(*key.as_array());
+        }
     }
 
     pub fn value(&self) -> Value {
@@ -66,13 +75,6 @@ impl ItemRef {
                 .add(KEY_LENGTH)
                 .cast::<[u8; VALUE_LENGTH]>()
                 .write(value.into_bytes());
-        }
-    }
-
-    pub fn read(&self) -> Item {
-        Item {
-            key: self.key().to_owned(),
-            value: self.value(),
         }
     }
 
@@ -93,5 +95,32 @@ impl fmt::Debug for ItemRef {
             .field("key", self.key())
             .field("value", &self.value())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+
+    use super::*;
+
+    #[test]
+    fn test_item_cast_vec() {
+        const COUNT: usize = 5;
+
+        let items: Vec<_> = (0u32..COUNT as u32)
+            .map(|index| {
+                let key =
+                    Key::new(Bytes::from_owner([index.try_into().unwrap(); KEY_LENGTH])).unwrap();
+                let value = Value {
+                    offset: index,
+                    length: index,
+                    decompressed: index,
+                };
+                ItemRef::new(key, value)
+            })
+            .collect();
+        let bytes = ItemRef::cast_vec(items);
+        assert_eq!(bytes.len(), COUNT * ITEM_LENGTH);
     }
 }

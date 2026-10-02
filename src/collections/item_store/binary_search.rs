@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use super::ItemStore;
-use crate::Key;
+use crate::KeyRef;
 
 #[derive(Clone, Copy, Debug)]
 pub enum SearchResult {
@@ -17,7 +17,12 @@ impl SearchResult {
 }
 
 impl ItemStore<'_> {
-    pub(crate) fn binary_search(&self, key: &Key, start: Option<(usize, usize)>) -> SearchResult {
+    pub(crate) fn binary_search(
+        &self,
+        key: impl AsRef<KeyRef>,
+        start: Option<(usize, usize)>,
+    ) -> SearchResult {
+        let key = key.as_ref();
         let cur_start = start.map_or(0, |start| start.0);
         let mut cur = cur_start..self.0.len();
         while !cur.is_empty() {

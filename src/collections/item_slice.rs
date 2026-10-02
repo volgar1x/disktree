@@ -1,10 +1,6 @@
 use std::{fmt, ops::Deref, slice};
 
-use crate::{
-    Key, Value,
-    collections::GetByKey,
-    item::{ITEM_LENGTH, ItemRef},
-};
+use crate::{ItemRef, KeyRef, Value, collections::GetByKey, item::ITEM_LENGTH};
 
 pub struct ItemSlice([ItemRef]);
 
@@ -38,17 +34,19 @@ impl GetByKey for ItemSlice {
         self.0.len()
     }
 
-    fn keys(&self) -> impl Iterator<Item = &Key> {
+    fn keys(&self) -> impl Iterator<Item = &KeyRef> {
         self.0.iter().map(|item| item.key())
     }
 
-    fn contains(&self, key: &Key) -> bool {
-        self.0.binary_search_by_key(&key, |item| item.key()).is_ok()
+    fn contains(&self, key: impl AsRef<KeyRef>) -> bool {
+        self.0
+            .binary_search_by_key(&key.as_ref(), |item| item.key())
+            .is_ok()
     }
 
-    fn get(&self, key: &Key) -> Option<Value> {
+    fn get(&self, key: impl AsRef<KeyRef>) -> Option<Value> {
         self.0
-            .binary_search_by_key(&key, |item| item.key())
+            .binary_search_by_key(&key.as_ref(), |item| item.key())
             .ok()
             .map(|index| self.0[index].value())
     }

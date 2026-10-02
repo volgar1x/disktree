@@ -18,6 +18,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytes"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -74,6 +80,7 @@ name = "disktree"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "rand",
  "sha2",
  "structured-zstd",
