@@ -7,4 +7,4 @@ mod value;
 
 pub use item::{Item, ItemRef};
 pub use key::{KEY_LENGTH, Key, KeyRef};
-pub use value::Value;
+pub use value::{VALUE_EXTRA_LENGTH, Value};

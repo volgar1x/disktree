@@ -116,6 +116,7 @@ mod tests {
                     offset: index,
                     length: index,
                     decompressed: index,
+                    extra: [0; _],
                 };
                 ItemRef::new(key, value)
             })

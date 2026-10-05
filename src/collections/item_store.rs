@@ -1,6 +1,6 @@
 mod binary_search;
 
-use std::{borrow::Cow, fmt, slice};
+use std::{fmt, ops::Deref, slice};
 
 use crate::{
     Item, ItemRef, Key, KeyRef, Value,
@@ -11,7 +11,46 @@ use crate::{
     item::ITEM_LENGTH,
 };
 
-pub struct ItemStore<'a>(Vec<Cow<'a, [ItemRef]>>);
+pub enum ItemStoreChunk<'a> {
+    Borrowed(&'a ItemSlice),
+    Owned(Vec<ItemRef>),
+}
+
+impl Deref for ItemStoreChunk<'_> {
+    type Target = ItemSlice;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Borrowed(chunk) => chunk,
+            Self::Owned(chunk) => ItemSlice::new(&chunk[..]),
+        }
+    }
+}
+
+impl ItemStoreChunk<'_> {
+    #[cfg(test)]
+    #[inline]
+    fn at(&self, index: usize) -> Option<&ItemRef> {
+        <[ItemRef]>::get(self, index)
+    }
+
+    pub fn to_mut(&mut self) -> &mut Vec<ItemRef> {
+        match self {
+            Self::Borrowed(chunk) => {
+                let new_chunk = (*chunk).to_vec();
+                *self = Self::Owned(new_chunk);
+                let Self::Owned(chunk) = self else {
+                    unreachable!()
+                };
+                chunk
+            }
+
+            Self::Owned(chunk) => chunk,
+        }
+    }
+}
+
+pub struct ItemStore<'a>(Vec<ItemStoreChunk<'a>>);
 
 impl fmt::Debug for ItemStore<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -28,9 +67,9 @@ where
 {
     type Item = &'b ItemRef;
     type IntoIter = std::iter::FlatMap<
-        std::slice::Iter<'b, Cow<'a, [ItemRef]>>,
+        std::slice::Iter<'b, ItemStoreChunk<'a>>,
         std::slice::Iter<'b, ItemRef>,
-        fn(&'b Cow<'a, [ItemRef]>) -> std::slice::Iter<'b, ItemRef>,
+        fn(&'b ItemStoreChunk<'a>) -> std::slice::Iter<'b, ItemRef>,
     >;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -38,9 +77,19 @@ where
     }
 }
 
+impl<'a> FromIterator<ItemStoreChunk<'a>> for ItemStore<'a> {
+    fn from_iter<T: IntoIterator<Item = ItemStoreChunk<'a>>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
 impl<'a> ItemStore<'a> {
     pub fn with_chunk_size(items: &'a ItemSlice, chunk_size: usize) -> Self {
-        let items = items.chunks(chunk_size).map(Cow::Borrowed).collect();
+        let items = items
+            .chunks(chunk_size)
+            .map(ItemSlice::new)
+            .map(ItemStoreChunk::Borrowed)
+            .collect();
         Self(items)
     }
 
@@ -49,17 +98,13 @@ impl<'a> ItemStore<'a> {
         Self::with_chunk_size(items, 0x200)
     }
 
-    pub fn into_chunks(self) -> impl Iterator<Item = ItemStoreChunk<'a>> {
-        self.0.into_iter().map(|chunk| match chunk {
-            Cow::Borrowed(chunk) => ItemStoreChunk::Borrowed(ItemSlice::new(chunk)),
-            Cow::Owned(chunk) => ItemStoreChunk::Owned(chunk),
-        })
+    pub fn chunks_mut(&mut self) -> impl Iterator<Item = &mut ItemStoreChunk<'a>> {
+        self.0.iter_mut()
     }
-}
 
-pub enum ItemStoreChunk<'a> {
-    Borrowed(&'a ItemSlice),
-    Owned(Vec<ItemRef>),
+    pub fn into_chunks(self) -> impl Iterator<Item = ItemStoreChunk<'a>> {
+        self.0.into_iter()
+    }
 }
 
 impl ItemStore<'_> {
@@ -113,7 +158,7 @@ impl InsertItem for ItemStore<'_> {
 
     fn insert_mut(&mut self, key: Key) -> Option<impl Setter<Value>> {
         if self.0.is_empty() {
-            let group = self.0.push_mut(Cow::Owned(vec![])).to_mut();
+            let group = self.0.push_mut(ItemStoreChunk::Owned(vec![])).to_mut();
             let item = group.push_mut(ItemRef::new(key, Value::default()));
             Some(item)
         } else {
@@ -164,11 +209,11 @@ impl ItemStore<'_> {
     fn debug_sorted(&self, index: usize, group_index: usize) {
         let cur_item = self.0[index][group_index].key();
         let prev_item = self.0[index]
-            .get(group_index - 1)
+            .at(group_index - 1)
             .map(|item| item.key())
             .or_else(|| Some(self.0.get(index - 1)?.last()?.key()));
         let next_item = self.0[index]
-            .get(group_index + 1)
+            .at(group_index + 1)
             .map(|item| item.key())
             .or_else(|| Some(self.0.get(index + 1)?.first()?.key()));
         let ctx_items = [prev_item, Some(cur_item), next_item];
@@ -213,7 +258,7 @@ impl<'a> ItemStore<'a> {
     pub fn remove_all<'b>(
         &'b mut self,
         keys: &'b KeySlice,
-    ) -> impl Iterator<Item = (Key, Value)> + use<'a, 'b> {
+    ) -> impl Iterator<Item = (&'b KeyRef, Value)> + use<'a, 'b> {
         ItemStoreRemover {
             store: self,
             keys: keys.iter(),
@@ -320,7 +365,7 @@ struct ItemStoreRemover<'a, 'b> {
 }
 
 impl<'a, 'b> Iterator for ItemStoreRemover<'a, 'b> {
-    type Item = (Key, Value);
+    type Item = (&'b KeyRef, Value);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -340,7 +385,7 @@ impl<'a, 'b> Iterator for ItemStoreRemover<'a, 'b> {
 
             self.prev_needle = Some((index, group_index));
 
-            return Some((item.key().to_owned(), item.value()));
+            return Some((key, item.value()));
         }
     }
 }
@@ -367,6 +412,7 @@ mod tests {
                 offset: index,
                 length: index,
                 decompressed: index,
+                extra: [0; _],
             };
             new_items.insert(key.clone(), value);
             items.insert(key, value);
@@ -394,6 +440,7 @@ mod tests {
                 offset: index,
                 length: index,
                 decompressed: index,
+                extra: [0; _],
             };
             new_items.insert(key, value);
         }

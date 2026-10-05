@@ -149,14 +149,6 @@ impl Borrow<KeyRef> for Key {
     }
 }
 
-impl ToOwned for KeyRef {
-    type Owned = Key;
-
-    fn to_owned(&self) -> Self::Owned {
-        Key::copy_from_array(&self.0)
-    }
-}
-
 impl PartialEq<KeyRef> for Key {
     fn eq(&self, other: &KeyRef) -> bool {
         self.as_ref() == other

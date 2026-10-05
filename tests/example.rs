@@ -41,7 +41,7 @@ fn test_imdb() -> anyhow::Result<()> {
     // This has been measured and should be stable since we sort the directory entries
     assert_eq!(index.len(), 10_000 - duplicates);
     let index = index.into_bytes();
-    assert_eq!(index.len(), 439_252);
+    assert_eq!(index.len(), 479_184);
     assert_eq!(objects.len(), 7_161_727);
 
     // Load store from a &[u8] without copying
@@ -61,7 +61,7 @@ fn test_imdb() -> anyhow::Result<()> {
 
     assert_eq!(index.len(), 20_000 - duplicates);
     let index = index.into_bytes(); // This is copying bytes from earlier store though
-    assert_eq!(index.len(), 876_612);
+    assert_eq!(index.len(), 956_304);
     assert_eq!(objects.len(), 14_363_182);
 
     // Reload updated store, still zero-copy
@@ -91,7 +91,7 @@ fn test_imdb() -> anyhow::Result<()> {
 
     assert_eq!(index.len(), 30_000 - duplicates);
     let index = index.into_bytes();
-    assert_eq!(index.len(), 1_310_012);
+    assert_eq!(index.len(), 1_429_104);
     assert_eq!(objects.len(), 21_336_179);
 
     // Reload store and verify it
@@ -176,6 +176,7 @@ fn write_sample(path: impl AsRef<Path>) -> anyhow::Result<()> {
             offset,
             decompressed,
             length,
+            extra: [0; _],
         });
         objects.extend_from_slice(&compressed);
     }
@@ -252,6 +253,7 @@ fn load_store(
             offset,
             decompressed,
             length,
+            extra: [0; _],
         });
     }
 
