@@ -16,6 +16,18 @@ pub enum ItemStoreChunk<'a> {
     Owned(Vec<ItemRef>),
 }
 
+impl ItemStoreChunk<'_> {
+    #[inline]
+    pub fn is_borrowed(&self) -> bool {
+        matches!(self, Self::Borrowed(_))
+    }
+
+    #[inline]
+    pub fn is_owned(&self) -> bool {
+        matches!(self, Self::Owned(_))
+    }
+}
+
 impl Deref for ItemStoreChunk<'_> {
     type Target = ItemSlice;
 
@@ -61,22 +73,6 @@ impl fmt::Debug for ItemStore<'_> {
     }
 }
 
-impl<'a, 'b> IntoIterator for &'b ItemStore<'a>
-where
-    'a: 'b,
-{
-    type Item = &'b ItemRef;
-    type IntoIter = std::iter::FlatMap<
-        std::slice::Iter<'b, ItemStoreChunk<'a>>,
-        std::slice::Iter<'b, ItemRef>,
-        fn(&'b ItemStoreChunk<'a>) -> std::slice::Iter<'b, ItemRef>,
-    >;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter().flat_map(|group| group.iter())
-    }
-}
-
 impl<'a> FromIterator<ItemStoreChunk<'a>> for ItemStore<'a> {
     fn from_iter<T: IntoIterator<Item = ItemStoreChunk<'a>>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
@@ -98,6 +94,10 @@ impl<'a> ItemStore<'a> {
         Self::with_chunk_size(items, 0x200)
     }
 
+    pub fn chunks(&self) -> impl Iterator<Item = &ItemStoreChunk<'a>> {
+        self.0.iter()
+    }
+
     pub fn chunks_mut(&mut self) -> impl Iterator<Item = &mut ItemStoreChunk<'a>> {
         self.0.iter_mut()
     }
@@ -108,12 +108,12 @@ impl<'a> ItemStore<'a> {
 }
 
 impl ItemStore<'_> {
-    pub fn chunks(&self) -> impl Iterator<Item = &ItemSlice> {
-        self.0.iter().map(|group| ItemSlice::new(group.as_ref()))
+    pub fn items(&self) -> impl Iterator<Item = &ItemRef> {
+        self.0.iter().flat_map(|group| group.iter())
     }
 
-    pub fn items(&self) -> impl Iterator<Item = &ItemRef> {
-        self.into_iter()
+    pub fn has_changed(&self) -> bool {
+        self.chunks().any(ItemStoreChunk::is_owned)
     }
 }
 
@@ -127,10 +127,7 @@ impl GetByKey for ItemStore<'_> {
     }
 
     fn keys(&self) -> impl Iterator<Item = &KeyRef> {
-        self.0
-            .iter()
-            .flat_map(|group| group.iter())
-            .map(|item| item.key())
+        self.items().map(|item| item.key())
     }
 
     fn contains(&self, key: impl AsRef<KeyRef>) -> bool {
